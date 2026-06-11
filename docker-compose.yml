@@ -12,11 +12,11 @@ services:
   backend:
     build: ./backend
     environment:
-      - KOMETA_CONFIG_DIR=/kometa/config
+      - KOMETA_CONFIG_DIR=/config
       - PORT=3001
     volumes:
       # Mount your Kometa config directory here
-      - ./kometa-config:/kometa/config
+      - ./kometaui:/config
     restart: unless-stopped
 
   # Optional: run Kometa itself alongside the UI

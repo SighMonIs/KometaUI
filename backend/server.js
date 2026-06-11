@@ -8,7 +8,7 @@ const app = express();
 app.use(express.json({ limit: '10mb' }));
 app.use(cors());
 
-const CONFIG_DIR = process.env.KOMETA_CONFIG_DIR || '/kometa/config';
+const CONFIG_DIR = process.env.KOMETA_CONFIG_DIR || '/config';
 
 // Ensure config dir exists
 if (!fs.existsSync(CONFIG_DIR)) {
