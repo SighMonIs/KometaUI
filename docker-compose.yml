@@ -1,6 +1,6 @@
 services:
   kometaui:
-    image: ghcr.io/sighmonIs/kometaui:latest
+    image: ghcr.io/sighmonis/kometaui:latest
     ports:
       - "8080:3001"
     volumes:
