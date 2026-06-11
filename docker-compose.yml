@@ -1,0 +1,29 @@
+version: "3.9"
+
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    environment:
+      - KOMETA_CONFIG_DIR=/kometa/config
+      - PORT=3001
+    volumes:
+      # Mount your Kometa config directory here
+      - ./kometa-config:/kometa/config
+    restart: unless-stopped
+
+  # Optional: run Kometa itself alongside the UI
+  # kometa:
+  #   image: kometateam/kometa:latest
+  #   volumes:
+  #     - ./kometa-config:/config
+  #   restart: unless-stopped
+  #   environment:
+  #     - KOMETA_TIME=06:00
