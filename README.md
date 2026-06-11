@@ -2,6 +2,8 @@
 
 A Docker-based web UI for managing all Kometa configuration files.
 
+> **⚠️ This project is 100% vibe coded using [Claude Code](https://claude.ai/code). Use at your own risk.**
+
 ## Features
 
 - **Connections tab** — Configure Plex, TMDb (required) and all optional connectors:
@@ -13,50 +15,49 @@ A Docker-based web UI for managing all Kometa configuration files.
 
 ## Quick Start
 
-```bash
-# Clone or download this folder
-cd kometa-ui
+Create a `docker-compose.yml` anywhere on your machine:
 
-# Optional: if you have an existing Kometa config folder
-# edit docker-compose.yml and change ./kometa-config to your path
-
-docker compose up -d --build
+```yaml
+services:
+  kometaui:
+    image: ghcr.io/sighmonis/kometaui:latest
+    ports:
+      - "8080:3001"
+    volumes:
+      - ./kometaui:/config
+    restart: unless-stopped
 ```
 
-Then open **http://localhost:8080** in your browser.
+Then run:
+
+```bash
+docker compose up -d
+```
+
+Open **http://localhost:8080** in your browser. A `kometaui/` folder will be created automatically next to your `docker-compose.yml` to store your config files.
 
 ## Connecting to an existing Kometa config
 
-Edit `docker-compose.yml` and change the volume mount:
+Change the volume mount to point at your existing config directory:
 
 ```yaml
 volumes:
-  - /path/to/your/kometa/config:/kometa/config
+  - /path/to/your/kometa/config:/config
 ```
-
-## Running Kometa alongside the UI
-
-Uncomment the `kometa:` service in `docker-compose.yml` and both containers will share the same config directory.
 
 ## Structure
 
 ```
-kometa-ui/
-├── frontend/
-│   ├── index.html      # Single-page React-free UI
-│   ├── nginx.conf      # Nginx config with API proxy
-│   └── Dockerfile
-├── backend/
-│   ├── server.js       # Express API server
-│   ├── package.json
-│   └── Dockerfile
-├── docker-compose.yml
-└── kometa-config/      # Shared config directory (auto-created)
+backend/
+├── public/index.html   # Single-page UI
+├── server.js           # Express API server
+├── package.json
+└── Dockerfile
+docker-compose.yml
 ```
 
 ## Ports
 
-| Service  | Port |
-|----------|------|
-| Web UI   | 8080 |
-| Backend  | 3001 (internal only) |
+| Service | Port |
+|---------|------|
+| Web UI  | 8080 |
