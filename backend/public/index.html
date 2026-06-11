@@ -273,6 +273,13 @@
   }
   .new-lib-form.visible { display: block; }
 
+  .btn-plex { background: #e5a00d; color: #000; font-weight: 700; }
+  .btn-plex:hover { background: #f0b429; }
+  .btn-plex:disabled { background: var(--surface3); color: var(--text-muted); cursor: not-allowed; }
+  .plex-auth-status { font-size: 12px; }
+  .plex-auth-status.success { color: var(--accent3); }
+  .plex-auth-status.waiting { color: var(--warn); }
+
   .icon-btn {
     background: none; border: none; cursor: pointer; padding: 4px 6px;
     border-radius: var(--radius-sm); color: var(--text-muted); font-size: 14px; transition: all 0.15s;
@@ -383,8 +390,15 @@
               <input type="text" id="plex_url" placeholder="http://192.168.1.12:32400" onchange="markDirty()">
             </div>
             <div class="field-group">
-              <label>Token <span class="hint">Plex auth token</span></label>
-              <input type="password" id="plex_token" placeholder="••••••••••••••••••••" onchange="markDirty()">
+              <label>Token</label>
+              <input type="hidden" id="plex_token" onchange="markDirty()">
+              <div style="display:flex;align-items:center;gap:10px">
+                <button class="btn btn-plex" id="plex-auth-btn" onclick="plexSignIn()">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm-1.5 17.25L6 12l4.5-5.25v3.75H18v3H10.5v3.75z"/></svg>
+                  Sign in with Plex
+                </button>
+                <span id="plex-auth-status" class="plex-auth-status"></span>
+              </div>
             </div>
             <div class="field-group">
               <label>Timeout <span class="hint">seconds</span></label>
@@ -1271,6 +1285,12 @@ function populateConfig(cfg) {
   if (cfg.plex) {
     sv('plex_url', cfg.plex.url);
     sv('plex_token', cfg.plex.token);
+    if (cfg.plex.token) {
+      const btn = document.getElementById('plex-auth-btn');
+      if (btn) { btn.textContent = '✓ Signed in'; }
+      const status = document.getElementById('plex-auth-status');
+      if (status) { status.className = 'plex-auth-status success'; status.textContent = 'Token loaded'; }
+    }
     sv('plex_timeout', cfg.plex.timeout ?? 60);
     sv('plex_db_cache', cfg.plex.db_cache ?? 40);
     scb('plex_clean_bundles', cfg.plex.clean_bundles);
@@ -1548,6 +1568,82 @@ function toast(msg, type = 'info') {
 window.addEventListener('beforeunload', e => {
   if (dirty) { e.preventDefault(); e.returnValue = ''; }
 });
+
+// ─── Plex OAuth PIN flow ───────────────────────────────────────────────────
+function getPlexClientId() {
+  let id = localStorage.getItem('kometaui_plex_client_id');
+  if (!id) {
+    id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+      const r = Math.random() * 16 | 0;
+      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+    localStorage.setItem('kometaui_plex_client_id', id);
+  }
+  return id;
+}
+
+async function plexSignIn() {
+  const clientId = getPlexClientId();
+  const btn = document.getElementById('plex-auth-btn');
+  const status = document.getElementById('plex-auth-status');
+
+  btn.disabled = true;
+  status.className = 'plex-auth-status waiting';
+  status.textContent = '⏳ Waiting for Plex login…';
+
+  try {
+    const pinRes = await fetch('https://plex.tv/api/v2/pins', {
+      method: 'POST',
+      headers: {
+        'X-Plex-Client-Identifier': clientId,
+        'X-Plex-Product': 'KometaUI',
+        'X-Plex-Version': '1.0.0',
+        'Accept': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: 'strong=true'
+    });
+    const pin = await pinRes.json();
+
+    const authUrl = `https://app.plex.tv/auth#?clientID=${clientId}&code=${pin.code}&context[device][product]=KometaUI`;
+    const popup = window.open(authUrl, 'plex-auth', 'width=800,height=700,left=200,top=100');
+
+    const poll = setInterval(async () => {
+      if (popup && popup.closed && !document.getElementById('plex_token').value) {
+        clearInterval(poll);
+        btn.disabled = false;
+        status.className = 'plex-auth-status';
+        status.textContent = '';
+        return;
+      }
+      try {
+        const checkRes = await fetch(`https://plex.tv/api/v2/pins/${pin.id}`, {
+          headers: {
+            'X-Plex-Client-Identifier': clientId,
+            'Accept': 'application/json'
+          }
+        });
+        const check = await checkRes.json();
+        if (check.authToken) {
+          clearInterval(poll);
+          if (popup && !popup.closed) popup.close();
+          document.getElementById('plex_token').value = check.authToken;
+          markDirty();
+          btn.disabled = false;
+          btn.textContent = '✓ Signed in';
+          status.className = 'plex-auth-status success';
+          status.textContent = check.username || '';
+          toast('Signed in to Plex!', 'success');
+        }
+      } catch {}
+    }, 2000);
+  } catch (e) {
+    btn.disabled = false;
+    status.className = 'plex-auth-status';
+    status.textContent = '';
+    toast(`Plex auth error: ${e.message}`, 'error');
+  }
+}
 </script>
 </body>
 </html>
