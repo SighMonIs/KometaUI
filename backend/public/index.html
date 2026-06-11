@@ -386,8 +386,10 @@
           </div>
           <div class="field-grid">
             <div class="field-group">
-              <label>URL <span class="hint">e.g. http://192.168.1.12:32400</span></label>
-              <input type="text" id="plex_url" placeholder="http://192.168.1.12:32400" onchange="markDirty()">
+              <label>Server URL</label>
+              <div id="plex-url-container">
+                <input type="text" id="plex_url" placeholder="http://192.168.1.12:32400" onchange="markDirty()">
+              </div>
             </div>
             <div class="field-group">
               <label>Token</label>
@@ -1634,6 +1636,7 @@ async function plexSignIn() {
           status.className = 'plex-auth-status success';
           status.textContent = check.username || '';
           toast('Signed in to Plex!', 'success');
+          fetchPlexServers(check.authToken);
         }
       } catch {}
     }, 2000);
@@ -1643,6 +1646,77 @@ async function plexSignIn() {
     status.textContent = '';
     toast(`Plex auth error: ${e.message}`, 'error');
   }
+}
+
+async function fetchPlexServers(token) {
+  try {
+    const res = await fetch('https://plex.tv/api/v2/resources?includeHttps=1&includeRelay=1', {
+      headers: {
+        'X-Plex-Client-Identifier': getPlexClientId(),
+        'X-Plex-Token': token,
+        'Accept': 'application/json'
+      }
+    });
+    const resources = await res.json();
+    const servers = resources.filter(r => r.provides && r.provides.includes('server'));
+    if (servers.length > 0) renderServerDropdown(servers);
+    else toast('No Plex servers found on your account', 'info');
+  } catch (e) {
+    toast(`Could not fetch servers: ${e.message}`, 'error');
+  }
+}
+
+function bestConnection(connections) {
+  return connections.find(c => c.local && !c.relay)
+    || connections.find(c => !c.local && !c.relay)
+    || connections.find(c => c.relay);
+}
+
+function renderServerDropdown(servers) {
+  const container = document.getElementById('plex-url-container');
+  const currentUrl = document.getElementById('plex_url')?.value || '';
+
+  const options = servers.map(s => {
+    const conn = bestConnection(s.connections || []);
+    const uri = conn ? conn.uri : '';
+    const tag = conn?.local ? '🏠 local' : conn?.relay ? '☁️ relay' : '🌐 remote';
+    return `<option value="${uri}" ${currentUrl === uri ? 'selected' : ''}>${s.name} — ${tag}</option>`;
+  }).join('');
+
+  container.innerHTML = `
+    <select id="plex_url" onchange="onServerSelect(this)" style="width:100%">
+      ${options}
+      <option value="__manual__">Enter URL manually…</option>
+    </select>
+    <input type="text" id="plex_url_manual" placeholder="http://192.168.1.12:32400"
+      style="display:none;margin-top:6px;width:100%" oninput="syncManualUrl()">
+  `;
+
+  // Auto-select first server if no URL set yet
+  if (!currentUrl) {
+    const conn = bestConnection(servers[0].connections || []);
+    if (conn) { document.getElementById('plex_url').value = conn.uri; markDirty(); }
+  }
+}
+
+function onServerSelect(select) {
+  const manual = document.getElementById('plex_url_manual');
+  manual.style.display = select.value === '__manual__' ? 'block' : 'none';
+  if (select.value !== '__manual__') markDirty();
+}
+
+function syncManualUrl() {
+  const manual = document.getElementById('plex_url_manual');
+  const select = document.getElementById('plex_url');
+  let opt = select.querySelector('option[data-manual]');
+  if (!opt) {
+    opt = document.createElement('option');
+    opt.setAttribute('data-manual', '1');
+    select.appendChild(opt);
+  }
+  opt.value = manual.value;
+  select.value = manual.value;
+  markDirty();
 }
 </script>
 </body>
